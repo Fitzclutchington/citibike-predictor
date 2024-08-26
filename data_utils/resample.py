@@ -85,7 +85,7 @@ def resample(df: pd.DataFrame, interval: str = "1h") -> pd.DataFrame:
 
 
 @click.command()
-@click.argument("interval")
+@click.option("-i", "--interval")
 def main(interval: str, data_path: Path = DATA_PATH):
     raw_data_path = data_path / "raw_data"
     raw_data_files = glob.glob(f"{raw_data_path}/citi_bike_data_*.csv")

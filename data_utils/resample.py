@@ -1,6 +1,10 @@
+import glob
 from pathlib import Path
 
+import click
 import pandas as pd
+
+DATA_PATH = Path("/Users/fitz/Documents/citibike-predictor/data/")
 
 
 def read_csv(filename: str) -> pd.DataFrame:
@@ -72,16 +76,29 @@ def resample(df: pd.DataFrame, interval: str = "1h") -> pd.DataFrame:
         "capacity": "first",
     }
     # remove rows with missing info
-    df = df[df["missing_station_information"] == False]
+    df = df.loc[df["missing_station_information"] == False].copy()
     df.set_index(["station_id", "station_status_last_reported"], inplace=True)
     df.sort_index(inplace=True)
     df = df.groupby("station_id").resample(interval, level=1).agg(agg_strat)
-    
+    df.reset_index(inplace=True)
     return df
 
+
+@click.command()
+@click.argument("interval")
+def main(interval: str, data_path: Path = DATA_PATH):
+    raw_data_path = data_path / "raw_data"
+    raw_data_files = glob.glob(f"{raw_data_path}/citi_bike_data_*.csv")
+    for raw_data_file in sorted(raw_data_files):
+        df = read_csv(raw_data_file)
+        df = resample(df, interval=interval)
+
+        file_name = Path(raw_data_file).name
+        # TODO: autmoatically make this dir if DNE
+        output_path = data_path / f"{interval}_resample" / file_name
+        df.to_csv(output_path, index=False)
+        print(f"completed file {output_path}")
+
+
 if __name__ == "__main__":
-    data_path = "/Users/fitz/Documents/citibike-predictor/data/citi_bike_data_00000.csv"
-    df = read_csv(data_path)
-    df = resample(df)
-    # TODO: Save preprocessed data (parquet? csv?)
-    # How do we partition?
+    main()

@@ -7,6 +7,7 @@ import pandas as pd
 DATA_PATH = Path("/Users/fitz/Documents/citibike-predictor/data/")
 
 
+# TODO: refactor into some kind of DataReader object, will be used when generating model
 def read_csv(filename: str) -> pd.DataFrame:
     """
     Read DataFrame from a CSV file ``filename`` and convert to a
@@ -51,10 +52,21 @@ def read_csv(filename: str) -> pd.DataFrame:
     return df
 
 
-def resample(df: pd.DataFrame, interval: str = "1h") -> pd.DataFrame:
+def save_csv(df: pd.DataFrame, filepath: Path | str) -> None:
+
+    # revert dates back to epochs
+    df["station_status_last_reported"] = df[
+        "station_status_last_reported"
+    ].dt.tz_convert("UTC")
+    df["station_status_last_reported"] = df["station_status_last_reported"].astype(int)
+    df.to_csv(filepath, index=False)
+
+
+def preprocess(df: pd.DataFrame, interval: str = "1h") -> pd.DataFrame:
     """
     - sort df by station_id, station_status_last_reported
     - resample df by time interval provided
+    - add features
     """
 
     # TODO: make this configurable
@@ -80,12 +92,16 @@ def resample(df: pd.DataFrame, interval: str = "1h") -> pd.DataFrame:
     df.set_index(["station_id", "station_status_last_reported"], inplace=True)
     df.sort_index(inplace=True)
     df = df.groupby("station_id").resample(interval, level=1).agg(agg_strat)
+    df.dropna(inplace=True)
     df.reset_index(inplace=True)
+    df['hour'] = df['station_status_last_reported'].dt.hour
+    df['day_of_week'] = df['station_status_last_reported'].dt.dayofweek
+    df['month'] = df['station_status_last_reported'].dt.month
     return df
 
 
-@click.command()
-@click.option("-i", "--interval")
+# @click.command()
+# @click.option("-i", "--interval")
 def main(interval: str, data_path: Path = DATA_PATH):
     raw_data_path = data_path / "raw_data"
     raw_data_files = glob.glob(f"{raw_data_path}/citi_bike_data_*.csv")
@@ -94,11 +110,11 @@ def main(interval: str, data_path: Path = DATA_PATH):
         df = resample(df, interval=interval)
 
         file_name = Path(raw_data_file).name
-        # TODO: autmoatically make this dir if DNE
+        # TODO: automatically make this dir if DNE
         output_path = data_path / f"{interval}_resample" / file_name
-        df.to_csv(output_path, index=False)
+        save_csv(df, output_path)
         print(f"completed file {output_path}")
 
 
 if __name__ == "__main__":
-    main()
+    main("1h")
